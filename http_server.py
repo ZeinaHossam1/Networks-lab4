@@ -68,8 +68,10 @@ while True:
     data, addr, seq, ack, syn, ack_flag, fin = server.receive()
 
     if fin == 1:
-        print("\n[SERVER] Disconnect signal received. Shutting down...")
-        break
+        print("\n[SERVER] Disconnect signal received. Closing current connection.")
+        # Instead of 'break', you can restart the listening process
+        server.accept_connection("127.0.0.1", 8080)
+        continue
 
     if data:
         # Process the request and generate HTTP response
