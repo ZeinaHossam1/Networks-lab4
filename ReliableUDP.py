@@ -83,35 +83,46 @@ class ReliableUDP:
         
         while True:
             # (2) listen for SYN packet
-                # We don't want the server to timeout while waiting for a new client
-                self.socket.settimeout(None)
-                r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = self.receive() # If a SYN-ACK wasn't received in 2 secs a timeout occurs and it returns an error
-                
-                if(r_syn==1):
-                    print("SYN received from {addr}! Sending SYN-ACK...")
-                    self.server_address=addr
-                    break
+            # We don't want the server to timeout while waiting for a new client
+            self.socket.settimeout(None)
+            r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = self.receive() # If a SYN-ACK wasn't received in 2 secs a timeout occurs and it returns an error
+            
+            if(r_syn==1):
+                print("SYN received from {addr}! Sending SYN-ACK...")
+                self.server_address=addr
 
                 # (3) Send SYN-ACK (Seq=0, Ack=1, SYN=1, ACK=1)
                 SYN_ACK_packet=self.build_packet(0, 1, 1, 1, 0, b"")
                 self.socket.sendto(SYN_ACK_packet, self.server_address)
 
                 # (4) listen for ACK packet
-                try:
-                    self.socket.settimeout(2.0)
-                    r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = self.receive() 
-                    if(r_ack_flag==1):
-                        print("Final ACK received. Connection established!")
-                    return True
-                except socket.timeout:
-                    print("Handshake failed. Client did not send final ACK.")
-                    return False
+                while True:
+                    try:
+                        self.socket.settimeout(2.0)
+                        r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = self.receive() 
+                        if(r_ack_flag==1 and r_syn==0):
+                            print("Final ACK received. Connection established!")
+                            return 
+                        elif r_syn == 1:
+                            # The client timed out and resent the SYN. Resend SYN-ACK
+                            print("Duplicate SYN received. Resending SYN-ACK...")
+                            self.socket.sendto(SYN_ACK_packet, self.server_address)
+                            continue
+
+                    except socket.timeout:
+                        print("Handshake failed. Client did not send final ACK.")
+                        break
 
     def receive(self, buffer_size=1024):
 
         while True:
             # (1) The socket listens for incoming data
-            raw_packet, sender_address = self.socket.recvfrom(buffer_size)      #Catches the entire combined packet
+            try:
+                raw_packet, sender_address = self.socket.recvfrom(buffer_size)       #Catches the entire combined packet   
+            except ConnectionResetError:
+                # The remote server closed early. 
+                raise socket.timeout
+        
 
             # (2) We slice the raw packet to seperate the data from the header
             header=raw_packet[:15]
@@ -127,13 +138,13 @@ class ReliableUDP:
             
             # (5) compare with received checksum
             if calculated_checksum==received_checksum:
+                #checking which type of data it is
                 if syn == 0 and (fin == 1 or data != b""):
                     
                     print(f"Data received (Seq: {seq}). Sending ACK...")
                     # 1. Build the ACK packet
                     # Set ack_num to the seq we just received 
                     ack_packet = self.build_packet(self.current_seq_num,seq,0,1,0,data=b"")
-                    
                     # 2. Send the ACK back to the sender
                     self.socket.sendto(ack_packet, sender_address)
 
