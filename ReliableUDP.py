@@ -166,7 +166,7 @@ class ReliableUDP:
                 print("Corrupted packet dropped!")
 
 
-    def send(self,data,simulate_loss=False, simulate_corruption=False):
+    def send(self,data,simulate_loss=False, simulate_corruption=False,simulate_duplicate=False):
         # (1) create the packet to be sent
         packet=self.build_packet(self.current_seq_num, 0, 0, 1, 0, data)
         
@@ -185,6 +185,11 @@ class ReliableUDP:
                     # Flip bits in the last byte to ruin the checksum math
                     corrupted_packet = packet[:-1] + bytes([packet[-1] ^ 0xFF])
                     self.socket.sendto(corrupted_packet, self.server_address)
+
+                elif simulate_duplicate and retries == 0:
+                    print(f"\n[SIMULATION] Sending packet (Seq: {self.current_seq_num}) TWICE...")
+                    self.socket.sendto(packet, self.server_address) # Send first copy
+                    self.socket.sendto(packet, self.server_address) # Send duplicate immediately
 
                 else:
                     self.socket.sendto(packet,self.server_address)

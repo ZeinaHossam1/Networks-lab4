@@ -23,5 +23,10 @@ if client.connect(("127.0.0.1", 8080)):
     client.send(b"This packet will have a false checksum.", simulate_corruption=True)
     time.sleep(2)
 
+    # TEST 4: Duplicate Packets
+    print("\n[TEST 4] Simulating duplicate packets...")
+    client.send(b"This message is sent twice, but should only appear once.", simulate_duplicate=True)
+    time.sleep(2)
+
     print("\n--- Disconnecting ---")
     client.disconnect()
