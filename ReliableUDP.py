@@ -102,7 +102,8 @@ class ReliableUDP:
                         r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = self.receive() 
                         if(r_ack_flag==1 and r_syn==0):
                             print("Final ACK received. Connection established!")
-                            return 
+                            self.socket.settimeout(None)
+                            return True
                         elif r_syn == 1:
                             # The client timed out and resent the SYN. Resend SYN-ACK
                             print("Duplicate SYN received. Resending SYN-ACK...")
