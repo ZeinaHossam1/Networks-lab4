@@ -86,9 +86,12 @@ class ReliableUDP:
         return True
 
     def accept_connection(self, host, port):
-        # 1. Bind the physical socket to the IP and Port
-        self.socket.bind((host, port))
-        print(f"Server listening on {host}:{port}...")
+        # 1. Bind the physical socket to the IP and Port (Catch error if already bound)
+        try:
+            self.socket.bind((host, port))
+            print(f"Server listening on {host}:{port}...")
+        except OSError:
+            print(f"\nReady for a new connection on {host}:{port}...")
 
         while True:
             # (2) listen for SYN packet
@@ -101,6 +104,10 @@ class ReliableUDP:
             if r_syn == 1:
                 print("SYN received from {addr}! Sending SYN-ACK...")
                 self.server_address = addr
+
+                # Reset sequence numbers for the new connection!
+                self.current_seq_num = 0
+                self.expected_seq_num = 0
 
                 # (3) Send SYN-ACK (Seq=0, Ack=1, SYN=1, ACK=1)
                 SYN_ACK_packet = self.build_packet(0, 1, 1, 1, 0, b"")
