@@ -17,6 +17,7 @@ class ReliableUDP:
         # What sequence number the receiver is expecting next
         self.expected_seq_num = 0
 
+
     def build_packet(self, seq_num, ack_num, syn_flag, ack_flag, fin_flag, data=b""):
         # Initialize header format for the pack function
         header_format = "!IIBBBI"
@@ -34,16 +35,11 @@ class ReliableUDP:
 
         return packet
 
-    def calculate_checksum(self, data: bytes) -> int:
-        """
-        Calculates a 32-bit Cyclic Redundancy Check (CRC) for the given byte array.
-        """
-        # zlib.crc32 generates the mathematical checksum.
-        # We apply a bitwise AND (& 0xffffffff) to ensure the result is always
-        # treated as an unsigned 32-bit integer across all Python versions.
-        checksum = zlib.crc32(data) & 0xFFFFFFFF
 
+    def calculate_checksum(self, data: bytes) -> int:
+        checksum = zlib.crc32(data) & 0xFFFFFFFF
         return checksum
+
 
     # 3-way handshake
     def connect(self, server_address):
@@ -97,10 +93,8 @@ class ReliableUDP:
             # (2) listen for SYN packet
             # We don't want the server to timeout while waiting for a new client
             self.socket.settimeout(None)
-            r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = (
-                self.receive()
-            )  # If a SYN-ACK wasn't received in 2 secs a timeout occurs and it returns an error
-
+            r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = self.receive()
+            
             if r_syn == 1:
                 print("SYN received from {addr}! Sending SYN-ACK...")
                 self.server_address = addr
@@ -134,8 +128,8 @@ class ReliableUDP:
                         print("Handshake failed. Client did not send final ACK.")
                         break
 
-    def receive(self, buffer_size=1024):
 
+    def receive(self, buffer_size=1024):
         while True:
             # (1) The socket listens for incoming data
             try:
@@ -190,17 +184,11 @@ class ReliableUDP:
             else:
                 print("Corrupted packet dropped!")
 
-    def send(
-        self,
-        data,
-        simulate_loss=False,
-        simulate_corruption=False,
-        simulate_duplicate=False,
-    ):
+    def send( self, data, simulate_loss=False, simulate_corruption=False, simulate_duplicate=False):
         # (1) create the packet to be sent
         packet = self.build_packet(self.current_seq_num, 0, 0, 1, 0, data)
 
-        # (2) start sending and
+        # (2) start sending 
         max_retries = 6
         retries = 0
 
@@ -210,7 +198,7 @@ class ReliableUDP:
                     print(
                         f"\n[SIMULATION] Dropping packet (Seq: {self.current_seq_num}). Waiting for timeout..."
                     )
-                    # Intentionally skip the sendto() command!
+                    # Intentionally skip the sendto() command
 
                 elif simulate_corruption and retries == 0:
                     print(
@@ -225,9 +213,7 @@ class ReliableUDP:
                         f"\n[SIMULATION] Sending packet (Seq: {self.current_seq_num}) TWICE..."
                     )
                     self.socket.sendto(packet, self.server_address)  # Send first copy
-                    self.socket.sendto(
-                        packet, self.server_address
-                    )  # Send duplicate immediately
+                    self.socket.sendto( packet, self.server_address)  # Send duplicate immediately
 
                 else:
                     self.socket.sendto(packet, self.server_address)
