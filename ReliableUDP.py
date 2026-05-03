@@ -17,7 +17,6 @@ class ReliableUDP:
         # What sequence number the receiver is expecting next
         self.expected_seq_num = 0
 
-
     def build_packet(self, seq_num, ack_num, syn_flag, ack_flag, fin_flag, data=b""):
         # Initialize header format for the pack function
         header_format = "!IIBBBI"
@@ -35,11 +34,9 @@ class ReliableUDP:
 
         return packet
 
-
     def calculate_checksum(self, data: bytes) -> int:
         checksum = zlib.crc32(data) & 0xFFFFFFFF
         return checksum
-
 
     # 3-way handshake
     def connect(self, server_address):
@@ -94,7 +91,7 @@ class ReliableUDP:
             # We don't want the server to timeout while waiting for a new client
             self.socket.settimeout(None)
             r_data, addr, r_seq, r_ack, r_syn, r_ack_flag, r_fin = self.receive()
-            
+
             if r_syn == 1:
                 print("SYN received from {addr}! Sending SYN-ACK...")
                 self.server_address = addr
@@ -128,7 +125,6 @@ class ReliableUDP:
                         print("Handshake failed. Client did not send final ACK.")
                         break
 
-
     def receive(self, buffer_size=1024):
         while True:
             # (1) The socket listens for incoming data
@@ -154,41 +150,63 @@ class ReliableUDP:
             # (4) Calculate checksum for recreated packet
             calculated_checksum = self.calculate_checksum(dummy_packet)
 
+            last_good_seq = 1 - self.expected_seq_num
+
             # (5) compare with received checksum
             if calculated_checksum == received_checksum:
                 # checking which type of data it is
                 if syn == 0 and (fin == 1 or data != b""):
 
-                    print(f"Data received (Seq: {seq}). Sending ACK...")
-                    # 1. Build the ACK packet
-                    # Set ack_num to the seq we just received
-                    ack_packet = self.build_packet(
-                        self.current_seq_num, seq, 0, 1, 0, data=b""
-                    )
-                    # 2. Send the ACK back to the sender
-                    self.socket.sendto(ack_packet, sender_address)
-
-                    # 3. Check for duplicate packets
                     if seq == self.expected_seq_num:
-                        # This is a new packet Update expected seq_num-->toggle
+                        # CASE 1: Perfect Packet
+                        print(f"Data received (Seq: {seq}). Sending ACK...")
+                        ack_packet = self.build_packet(
+                            self.current_seq_num, seq, 0, 1, 0, data=b""
+                        )
+                        self.socket.sendto(ack_packet, sender_address)
+
+                        # Toggle expected sequence
                         self.expected_seq_num = 1 - self.expected_seq_num
                         return data, sender_address, seq, ack, syn, ack_flag, fin
+
                     else:
-                        # This is a duplicate packet.
-                        print(f"Duplicate packet (Seq: {seq}) dropped")
+                        # CASE 2: Duplicate Packet (Wrong Sequence)
+                        # RDT 3.0: Resend ACK for the last successfully received packet
+                        print(
+                            f"Duplicate packet (Seq: {seq}) dropped. Sending ACK {last_good_seq}..."
+                        )
+                        ack_packet = self.build_packet(
+                            self.current_seq_num, last_good_seq, 0, 1, 0, data=b""
+                        )
+                        self.socket.sendto(ack_packet, sender_address)
                         continue
 
                 # If it's a SYN or FIN packet, just return it normally so connect() and accept_connection() work
                 return data, sender_address, seq, ack, syn, ack_flag, fin
 
             else:
-                print("Corrupted packet dropped!")
+                # CASE 3: Corrupted Packet
+                # RDT 3.0: Send ACK for the last successfully received packet
+                print(
+                    f"Corrupted packet dropped! Sending ACK {last_good_seq} to trigger retransmit..."
+                )
+                ack_packet = self.build_packet(
+                    self.current_seq_num, last_good_seq, 0, 1, 0, data=b""
+                )
+                self.socket.sendto(ack_packet, sender_address)
+                continue
 
-    def send( self, data, simulate_loss=False, simulate_corruption=False, simulate_duplicate=False):
+    def send(
+        self,
+        data,
+        simulate_loss=False,
+        simulate_corruption=False,
+        simulate_duplicate=False,
+    ):
         # (1) create the packet to be sent
         packet = self.build_packet(self.current_seq_num, 0, 0, 1, 0, data)
 
-        # (2) start sending 
+        # (2) start sending
         max_retries = 6
         retries = 0
 
@@ -213,7 +231,9 @@ class ReliableUDP:
                         f"\n[SIMULATION] Sending packet (Seq: {self.current_seq_num}) TWICE..."
                     )
                     self.socket.sendto(packet, self.server_address)  # Send first copy
-                    self.socket.sendto( packet, self.server_address)  # Send duplicate immediately
+                    self.socket.sendto(
+                        packet, self.server_address
+                    )  # Send duplicate immediately
 
                 else:
                     self.socket.sendto(packet, self.server_address)

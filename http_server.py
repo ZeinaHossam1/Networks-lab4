@@ -69,7 +69,7 @@ while True:
 
     if fin == 1:
         print("\n[SERVER] Disconnect signal received. Closing current connection.")
-        # Instead of 'break', you can restart the listening process
+        # Instead of 'break', restart the listening process
         server.accept_connection("127.0.0.1", 8080)
         continue
 

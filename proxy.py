@@ -4,7 +4,7 @@ from ReliableUDP import ReliableUDP
 # Configuration
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT = 8081  # The browser will connect to this port
-UDP_SERVER_PORT = 8080  # Your ReliableUDP server is listening here
+UDP_SERVER_PORT = 8080  # ReliableUDP server is listening here
 
 
 def start_proxy():
